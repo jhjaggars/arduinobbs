@@ -1,0 +1,16 @@
+EEPROM filesystem (ha) notes
+============================
+
+The first two bytes are the write address bytes.
+They store the current address to begin writing from.
+They are ordered in a big endian fashion:
+
+0 = MSByte
+1 = LSByte
+
+The current address is stored in an unsigned (16bit) int
+allowing up to 64k of EEPROM to be addressed.
+
+Currently each file is simply delimted by a null byte (\0).
+
+When space is erased it is written over with a max byte (\255)
