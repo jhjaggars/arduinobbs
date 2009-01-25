@@ -14,6 +14,8 @@
 int state = MAIN_MENU; // What state is the user in?
 
 #define MAX_EEPROM_ADDRESS 512
+#define FS_DELIM '\0'
+#define FS_SPACE '\255'
 
 unsigned int writing_address = 2;
 
@@ -67,14 +69,14 @@ void _print_messages()
   for( int i = 2; i < MAX_EEPROM_ADDRESS; i++ )
   {
     v = EEPROM.read(i);
-    if( v != '\0' && v != '\255' )
+    if( v != FS_DELIM && v != FS_SPACE )
     {
       if( len++ < MENU_WIDTH )
       {
         Serial.print(v, BYTE);
       }
     }
-    else if( v == '\0' )
+    else if( v == FS_DELIM )
     {
       len = 0;
       Serial.println("");
@@ -86,7 +88,7 @@ void _clear_messages()
 {
   _set_writing_address(2);
   for( int i = 2; i < MAX_EEPROM_ADDRESS; i++ )
-    EEPROM.write(i,'\255');
+    EEPROM.write(i,FS_SPACE);
 }
 
 void display_menu() {
@@ -200,7 +202,7 @@ void handle_sending_message( char * inp )
   if( *inp == ';' )
   {
     Serial.println("");
-    EEPROM.write(writing_address++, '\0');
+    EEPROM.write(writing_address++, FS_DELIM);
     _set_writing_address(writing_address); 
     state = SEND_MENU;
     return;
