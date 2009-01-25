@@ -192,6 +192,9 @@ void handle_sending_message( char * inp )
   {
     Serial.println("");
     EEPROM.write(writing_address++, '\0');
+    // write the writing address
+    EEPROM.write(0, writing_address & 256);
+    EEPROM.write(1, writing_address % 256);
     state = SEND_MENU;
     return;
   }
@@ -201,10 +204,6 @@ void handle_sending_message( char * inp )
   {
     EEPROM.write(writing_address++, *inp++);
   }
-  
-  // write the writing address
-  EEPROM.write(0, writing_address & 256);
-  EEPROM.write(1, writing_address % 256);
 }
 //
 
