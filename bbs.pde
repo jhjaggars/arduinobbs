@@ -7,16 +7,15 @@
 #define SENDING_MESSAGE 3
 
 /* Display width stuff */
-#define MENU_WIDTH 30
-#define _print_line() Serial.println("******************************")
+#define MENU_WIDTH 60
+#define _print_line() Serial.println("************************************************************")
 /*************************/
 
 int state = MAIN_MENU; // What state is the user in?
 
 #define MAX_EEPROM_ADDRESS 512
 
-int writing_address = 2;
-int reading_address = 0;
+unsigned int writing_address = 2;
 
 /*
  * Menu stuff 
@@ -39,8 +38,6 @@ void _print_center( int left, const char * text, int right )
   Serial.println("");
 }
 
-/***************************/
-
 void _print_item( const char * text, int count )
 { 
   Serial.print(count);
@@ -59,6 +56,8 @@ void _print_menu( char ** menu, const char * title, int len )
   }
   _print_line();
 }
+
+/*****************/
 
 void _print_messages()
 {
@@ -85,11 +84,9 @@ void _print_messages()
 
 void _clear_messages()
 {
-  EEPROM.write(0,0);
-  EEPROM.write(0,2);
+  _set_writing_address(2);
   for( int i = 2; i < MAX_EEPROM_ADDRESS; i++ )
     EEPROM.write(i,'\255');
-  writing_address = 2;
 }
 
 void display_menu() {
@@ -183,18 +180,28 @@ void handle_read_menu( char * inp )
   }
 }
 
+void _set_writing_address( unsigned int address )
+{
+  EEPROM.write(0, (address & 255) << 8);
+  EEPROM.write(1, address & 255);
+  writing_address = address;
+}
+
+void _load_writing_address()
+{
+  // Big Endian, 2 bytes addressing (good for up to 64k EEPROM I guess
+  unsigned int _w =  EEPROM.read(1) | ( EEPROM.read(0) << 8 );
+  if( _w > 2 )
+    writing_address = _w;
+}
+
 void handle_sending_message( char * inp )
 {
-  Serial.print("Writing Address: ");
-  Serial.println(writing_address);
-  
   if( *inp == ';' )
   {
     Serial.println("");
     EEPROM.write(writing_address++, '\0');
-    // write the writing address
-    EEPROM.write(0, writing_address & 256);
-    EEPROM.write(1, writing_address % 256);
+    _set_writing_address(writing_address); 
     state = SEND_MENU;
     return;
   }
@@ -206,22 +213,6 @@ void handle_sending_message( char * inp )
   }
 }
 //
-
-// Serial Readers //
-
-byte _read_one()
-{
-  byte _the_one = '\0';
-  if( Serial.available() )
-  {
-    _the_one = Serial.read();
-    
-    // toss the rest
-    delay(10);
-    Serial.flush();
-  }
-  return _the_one;
-}
 
 void _read_line(char * buf)
 {
@@ -240,12 +231,7 @@ void _read_line(char * buf)
 void setup()                    
 {      
   Serial.begin(9600);
-  
-  // Figure out where to start writing (512 eeprom only..)
-  int _w = EEPROM.read(0) + EEPROM.read(1);
-  if( _w > 2 )
-    writing_address = _w;
-    
+  _load_writing_address();
   display_menu();
 }
 
