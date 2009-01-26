@@ -2,13 +2,13 @@
 
 /* States */
 #define MAIN_MENU 0
-#define SEND_MENU 1
-#define READ_MENU 2
-#define SENDING_MESSAGE 3
+#define SENDING_MESSAGE 1
+#define READING_LIST 2
+#define READING_ITEM 3
 
 /* Display width stuff */
 #define MENU_WIDTH 60
-#define _print_line() Serial.println("************************************************************")
+#define _print_line() Serial.println("------------------------------------------------------------")
 /*************************/
 
 int state = MAIN_MENU; // What state is the user in?
@@ -22,9 +22,7 @@ unsigned int writing_address = 2;
 /*
  * Menu stuff 
  */ 
-char * main_menu[] = { "Send Message", "Read Message" };
-char * send_menu[] = { "Enter Message", "Back" };
-char * read_menu[] = { "Clear", "Back" };
+char * main_menu[] = { "Send Message", "Read Messages", "Clear Messages" };
 
 void _print_space( int len )
 {
@@ -42,9 +40,10 @@ void _print_center( int left, const char * text, int right )
 
 void _print_item( const char * text, int count )
 { 
-  Serial.print(count);
-  Serial.print(". ");
-  Serial.println(text);
+  Serial.print("[");
+  Serial.print(text[0]);
+  Serial.print("]");
+  Serial.println( (text + 1) );
 }
 
 void _print_menu( char ** menu, const char * title, int len )
@@ -56,23 +55,62 @@ void _print_menu( char ** menu, const char * title, int len )
   {
     _print_item( menu[i], i+1 );
   }
+}
+
+void _print_reading_menu()
+{
   _print_line();
+  Serial.println("Enter the number of the message you want to read or go [B]ack.");
 }
 
 /*****************/
+
+void _print_message(int msg_num)
+{
+  char v;
+  int count = 0;
+  for( int i = 2; i < MAX_EEPROM_ADDRESS; i++ )
+  {
+    v = EEPROM.read(i);
+    if( v != FS_DELIM && v != FS_SPACE )
+    {
+        if( count == 0 )
+          count = 1;
+
+        if( count == msg_num )
+          Serial.print(v, BYTE);
+    }
+    else if( v == FS_DELIM )
+      count++;
+
+    // stop scanning if we already printed the message.
+    if( count > msg_num )
+      return;
+  }
+}
 
 void _print_messages()
 {
   char v;
   int len = 0;
-  
+  int count = 0;
+
   for( int i = 2; i < MAX_EEPROM_ADDRESS; i++ )
   {
     v = EEPROM.read(i);
     if( v != FS_DELIM && v != FS_SPACE )
     {
       if( len++ < MENU_WIDTH )
-      {
+      { 
+        if( count == 0 )
+          count = 1;
+
+        if( count > 0  && len == 1 )
+        {
+          Serial.print(count);
+          Serial.print("> ");
+        }
+
         Serial.print(v, BYTE);
       }
     }
@@ -80,6 +118,7 @@ void _print_messages()
     {
       len = 0;
       Serial.println("");
+      count++;
     }
   }
 }
@@ -94,21 +133,23 @@ void _clear_messages()
 void display_menu() {
   switch (state)
   {
-    case SEND_MENU:
-      _print_menu( send_menu, "Send A Message", 2 );
-      break;
-    case READ_MENU:
-      _print_menu( read_menu, "Read a Message", 2 );
-      _print_messages();
-      break;
     case MAIN_MENU: 
-      _print_menu( main_menu, "Main Menu", 2 );
+      _print_menu( main_menu, "Main Menu", 3 );
       break;
     case SENDING_MESSAGE:
       Serial.print("[; to end message]> ");
       break;
+    case READING_LIST:
+      _print_line();
+      _print_messages();
+      _print_reading_menu();
+      break;
+    case READING_ITEM:
+      _print_line();
+      Serial.println("Go [b]ack or to the [M]ain menu.");
+      break;
     default:
-      Serial.println("Invalid State...");
+      Serial.println("Error: Invalid state in display_menu()");
       state = MAIN_MENU;
   }
 }
@@ -119,20 +160,20 @@ void handle_input( char * inp )
 {
   switch ( state )
   {
-    case SEND_MENU:
-      handle_send_menu( inp );
-      break;
-    case READ_MENU:
-      handle_read_menu( inp );
-      break;
     case MAIN_MENU:
       handle_main_menu( inp );
       break;
     case SENDING_MESSAGE:
       handle_sending_message( inp );
       break;
+    case READING_LIST:
+      handle_reading_list( inp );
+      break;
+    case READING_ITEM:
+      handle_reading_item( inp );
+      break;
     default:
-      Serial.println("Invalid State...");
+      Serial.println("Error: Invalid state in handle_input()");
       state = MAIN_MENU;
   }
 }
@@ -141,46 +182,66 @@ void handle_main_menu( char * inp )
 {
   switch ( *inp )
   {
-    case '1':
-      state = SEND_MENU;
-      break;
-    case '2':
-      state = READ_MENU;
-      break;
-    default:
-      Serial.println("You chose an invalid option.");
-  }
-}
-
-void handle_send_menu( char * inp )
-{
-  switch ( *inp )
-  {
-    case '1':
+    case 'S':
+    case 's':
       state = SENDING_MESSAGE;
       break;
-    case '2':
-      state = MAIN_MENU;
+    case 'R':
+    case 'r':
+      state = READING_LIST;
+      break;
+    case 'C':
+    case 'c':
+      Serial.println("Clearing messages...");
+      _clear_messages();
       break;
     default:
       Serial.println("You chose an invalid option.");
   }
 }
 
-void handle_read_menu( char * inp )
+void handle_reading_list( char * inp )
 {
-  switch ( *inp )
+  int item_num;
+
+  switch( *inp )
   {
-    case '1':
-      _clear_messages();
-      break;
-    case '2':
+    case 'B':
+    case 'b':
       state = MAIN_MENU;
       break;
     default:
-      Serial.println("You chose an invalid option.");
+      if( (item_num = atoi(inp)) > 0 )
+      {
+        _print_line();
+        _print_message(item_num);
+        Serial.println("");
+        state = READING_ITEM;
+      }
+      else
+      {
+        Serial.println("You chose an invalid option.");
+      }
   }
 }
+
+void handle_reading_item( char * inp )
+{
+  switch (*inp)
+  {
+    case 'b':
+    case 'B':
+      state = READING_LIST;
+      break;
+    case 'm':
+    case 'M':
+      state = MAIN_MENU;
+      break;
+    default:
+      break;
+  }
+}
+//
 
 void _set_writing_address( unsigned int address )
 {
@@ -204,7 +265,7 @@ void handle_sending_message( char * inp )
     Serial.println("");
     EEPROM.write(writing_address++, FS_DELIM);
     _set_writing_address(writing_address); 
-    state = SEND_MENU;
+    state = MAIN_MENU;
     return;
   }
   Serial.println("");
